@@ -36,7 +36,14 @@ class DatabaseHandler(object):
         self._cursor.execute("SELECT password FROM auth WHERE username=%s LIMIT 1", (username, ))
         passwd = self._cursor.fetchone()
         
-        return passwd
+        return passwd[0]
+    
+    
+    def is_admin(self, username: str) -> bool:
+        self._cursor.execute("SELECT is_admin FROM auth WHERE username=%s LIMIT 1", (username, ))
+        out = self._cursor.fetchone()
+        
+        return out[0]
     
     
     def check_ban(self, username: str) -> bool:

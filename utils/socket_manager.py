@@ -9,7 +9,8 @@ class SocketManager(object):
         self._sockets = {}
         self._lock = threading.Lock()
         
-    def append(self, conn: CryptoSocket) -> None:
+        
+    def append(self, conn: CryptoSocket, username: str | None = None) -> None:
         if type(conn) != CryptoSocket:
             raise ValueError(f"Invalid type: {type(conn)}")
         
@@ -20,8 +21,18 @@ class SocketManager(object):
                 "ip": conn.ip,
                 "port": conn.port,
                 "socket": conn,
-                "connected": conn.connected
+                "connected": conn.connected,
+                "username": username
             }
+            
+            
+    def update_username(self, conn_id: int, new_username: str) -> None:
+        with self._lock:
+            if conn_id not in self._sockets:
+                raise ValueError("Invalid connection id")
+            
+            self._sockets[conn_id]["username"] = new_username
+        
         
     def remove(self, conn_id: int) -> None:
         """ Remove a connection with the socket file descriptor """
@@ -29,6 +40,7 @@ class SocketManager(object):
         with self._lock:
             if self._sockets.pop(conn_id, None) is None:
                 raise ValueError("Invalid connection id")
+            
             
     def get(self, conn_id: int) -> CryptoSocket:
         """ Get a socket with the socket file descritpor """
@@ -38,8 +50,30 @@ class SocketManager(object):
         
             return self._sockets[conn_id]["socket"]
         
+    
+    def get(self, username: str) -> CryptoSocket:
+        """ Get a socket with the username """
+        with self._lock:
+            if not self.contains(username):
+                raise ValueError("Invalid username")
+        
+            for device in self._sockets:
+                if self._sockets[device]["username"] == username:
+                    return self._sockets[device]["socket"]
+        
+        
     def list(self) -> dict:
-        return self._sockets
+        with self._lock:
+            return self._sockets
+    
+    
+    def contains(self, username: str) -> bool:
+        with self._lock:
+            for device in self._sockets:
+                if self._sockets[device]["username"] == username:
+                    return True
+                
+            return False
         
     def clear(self) -> None:
         """ Clear all the saved connections """

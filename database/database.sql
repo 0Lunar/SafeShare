@@ -1,7 +1,8 @@
 CREATE TABLE auth(
     username CHAR(64) UNIQUE NOT NULL,  -- hash sha256
     password CHAR(60) NOT NULL,         -- hash bcrypt
-    email VARCHAR(50)
+    email VARCHAR(50),
+    is_admin BOOLEAN NOT NULL,
     PRIMARY KEY (username)
 );
 

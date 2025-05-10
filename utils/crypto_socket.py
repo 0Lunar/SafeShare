@@ -11,6 +11,13 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.utils import int_to_bytes
 from utils.exceptions import *
 import bcrypt
+import threading
+
+
+""" 
+Codes:
+    - 0x00: Get directory content
+"""
 
 
 class CryptoSocket(socket.socket):
@@ -35,8 +42,21 @@ class CryptoSocket(socket.socket):
         self._pk = None
         self._hmac = None
         
-        self.authenticated = False
+        self._authenticated = False
+        self._admin = False
+        self._lock = threading.Lock()
     
+    
+    #################### property ####################
+    
+    @property
+    def is_auth(self) -> bool:
+        """ Return if the connection is authenticated """
+        
+        return self._authenticated
+        
+        
+    #################### methods ####################
     
     def _import_object(self, conn: socket.socket, addr: tuple, key: bytes, hmac_key: bytes, rsa_key) -> None:
         if self.initialized:
@@ -239,10 +259,10 @@ class CryptoSocket(socket.socket):
     
     
     def accept(self):
-        conn, addr = super().accept()
-
         if not super().getsockopt(socket.SOL_SOCKET, socket.SO_ACCEPTCONN):
             raise Exception("Socket not in listening mode")
+        
+        conn, addr = super().accept()
 
         ########### Crypto handshake ##########
         
@@ -324,6 +344,13 @@ class CryptoSocket(socket.socket):
         return new_conn
     
     
+    def settimeout(self, value: int = 10) -> None:
+        if self._socket == self:
+            super().settimeout(value)
+        else:
+            self._socket.settimeout(value)
+    
+    
     def fileno(self) -> int:
         if self._socket == self:
             return super().fileno()
@@ -332,14 +359,58 @@ class CryptoSocket(socket.socket):
     
     
     def close(self) -> None:
+        self.send_data(b'\xff')
+        
         if self._socket == self:
             super().close()
         else:        
-            self._socket.close()
+            self._socket.close()        
+    
             
-            
-    def auth(self, username: bytes, password: bytes) -> bool:
+    def auth(self, username: bytes, password: bytes) -> int:
         """ Authentication """
         
-        payload = b'\x00' + username + password
+        payload = b'\x00' + username + b'\xff' + password
         self.send_data(payload)
+        
+        status = self.recv_data()
+        status = int.from_bytes(status)
+        
+        if status >= 1:
+            self._authenticated = True
+            
+        if status == 2:
+            self._admin = True
+            
+        return status
+    
+    
+    def get_devices(self) -> list[str]:
+        """ Get a list of all the connected devices """
+        
+        if not self._authenticated:
+            raise AuthenticationError("Not authenticated")
+        
+        code = b'\x01'
+        
+        self.send_data(code)
+        
+        devices = self._socket.recv_data()
+        devices = devices.split(b'\xff')
+        devices = [device.decode() for device in devices]
+        
+        return devices
+    
+    
+    def list_dir(self, dir: str, device: str) -> list[str]:
+        # TODO comando per ottenere file/cartelle dentro una cartella
+        
+        payload = b'\x02' + device.encode() + b'\xff' + dir.encode()
+        
+        self.send_data(payload)
+        out = self.recv_data()
+        
+        out = out.split(b'\xff')
+        out = [o.decode() for o in out]
+        
+        return out
